@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Print Module</title>
+</head>
+<body>
+  <h2>Print Module</h2>
+
+  <label for="printer-select">Select Printer:</label>
+  <select id="printer-select">
+    <option value="Office Printer">Neviton Printer</option>
+    <option value="Warehouse Printer">Arcolab Printer</option>
+  </select>
+
+  <h3>Available Print Jobs:</h3>
+  <select id="job-select" size="5" style="width: 100%;"></select>
+
+  <br />
+  <button id="print-btn" disabled>Print Selected Job</button>
+
+  <h3>Status Log:</h3>
+  <div id="log" style="border: 1px solid #ccc; height: 150px; overflow-y: auto; padding: 5px; font-family: monospace;"></div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const jobSelect = document.getElementById('job-select');
+    const printBtn = document.getElementById('print-btn');
+    const logDiv = document.getElementById('log');
+    const printerSelect = document.getElementById('printer-select');
+
+    const printJobs = new Map();
+
+    function appendLog(message) {
+      const p = document.createElement('div');
+      p.textContent = message;
+      logDiv.appendChild(p);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    ipcRenderer.on('new-print-job', (event, jobKey) => {
+      if (!printJobs.has(jobKey)) {
+        const option = document.createElement('option');
+        option.textContent = jobKey;
+        option.value = jobKey;
+        jobSelect.appendChild(option);
+        printJobs.set(jobKey, null);
+        appendLog(`📥 New print job detected: ${jobKey}`);
+        printBtn.disabled = false;
+      }
+    });
+
+    ipcRenderer.on('print-ready', (event, { key, path }) => {
+      printJobs.set(key, path);
+      appendLog(`✅ File ready for printing: ${key}`);
+    });
+
+    ipcRenderer.on('status-update', (event, message) => {
+      appendLog(message);
+    });
+
+    printBtn.addEventListener('click', () => {
+      const selectedKey = jobSelect.value;
+      if (!selectedKey) {
+        alert('Please select a print job.');
+        return;
+      }
+      const filePath = printJobs.get(selectedKey);
+      if (!filePath) {
+        alert('Print file not ready yet, please wait.');
+        return;
+      }
+      const printerName = printerSelect.value;
+
+      ipcRenderer.send('print-file', { filePath, printerName, s3Key: selectedKey });
+      appendLog('🖨 Sending print request...');
+      printBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
